@@ -8,62 +8,139 @@ See documentation here: https://www.raylib.com/, and examples here: https://www.
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #include "game.h"
+#include <string>
+#include <vector>
 
-const unsigned int TARGET_FPS = 50; // frames per second
-float dt = 1.0f / TARGET_FPS;// you can also use 1.f... seconds per frame... delta time (time between frames), used for movement interpolation and physics
+using namespace std;
+
+const unsigned int TARGET_FPS = 50; //frames/second
+float dt = 1.0f / TARGET_FPS; //seconds/frame
 float time = 0;
-//float x = 500;
-//float y = 500;
-//float frequency = 1.0f;
-//float amplitude = 100.0f;
-float launchAngle = 45.0f;   // degrees
-float launchSpeed = 180.0f;
-Vector2 launchPosition = { 100, 400 };
-Vector2 velocity;
-Vector2 endPosition;
 
+class PhysicsObject
+{
+	public:
+		Vector2 position = { 0,0 };
+		Vector2 velocity = { 0,0 };
+		float mass = 1.0f;
+		
+		float radius = 15; // circle radius in pixels
+		string name = "physicsObject";
+		Color color = RED;
+
+		void draw()
+		{
+			DrawCircle(position.x, position.y, radius, color);
+
+			DrawText(name.c_str(), position.x, position.y, radius * 2, color);
+
+			DrawLineEx(position, position + velocity, 1, color);
+		}
+		
+};
+
+class PhysicsSimulator
+{
+private:
+	unsigned int objectCount = 0;
+	public:
+		vector<PhysicsObject> objects;
+		Vector2 accelerationGravity = { 0, 9 };
+		
+		void add(PhysicsObject newObject)
+		{
+			newObject.name = to_string(objectCount);
+			objects.push_back(newObject);
+			objectCount++;
+		}
+
+		void update(float dt)
+		{
+			for (int i = 0; i < objects.size(); i++)
+			{
+				//vel = change in position / time, therefore     change in position = vel * time 
+				objects[i].position = objects[i].position + objects[i].velocity * dt;
+
+				//accel = deltaV / time (change in velocity over time) therefore     deltaV = accel * time
+				objects[i].velocity = objects[i].velocity + accelerationGravity * dt;
+
+			}
+		}
+};
+float speed = 100;
+float angle = 0;
+
+vector<PhysicsObject> objects ;
+
+PhysicsSimulator world;
+//Changes world state
+
+void cleanUp()
+{
+	// Remove objects that are off screen
+	for (int i = 0; i < world.objects.size(); i++)
+	{
+		if (world.objects[i].position.y - world.objects[i].radius > GetScreenHeight() ||
+			world.objects[i].position.y + world.objects[i].radius < 0 ||
+			world.objects[i].position.x + world.objects[i].radius < 0 ||
+			world.objects[i].position.x - world.objects[i].radius > GetScreenWidth())
+		{
+			world.objects.erase(world.objects.begin() + i);
+			i--;
+		}
+	}
+}
 void update()
 {
 	dt = 1.0f / TARGET_FPS;
-
 	time += dt;
 
-	/*y = y + (cos(time * frequency)) * frequency * amplitude * dt;
+	cleanUp();
+	world.update(dt);
+	
 
-	x = x + (-sin(time * frequency)) * frequency * amplitude * dt;*/
-
-	velocity = { launchSpeed * (float)cos(launchAngle * DEG2RAD), -launchSpeed * (float)sin(launchAngle * DEG2RAD) };
-
-	endPosition = launchPosition + velocity;
+	if (IsKeyPressed(KEY_SPACE))
+	{
+		PhysicsObject newBird;
+		newBird.position = { 100, (float)GetScreenHeight() - 100 };
+		newBird.velocity = { speed * (float)cos(angle * DEG2RAD), -speed * (float)sin(angle * DEG2RAD) };
+		
+		newBird.radius = (rand() % 26) + 5; //random radius between 5 and 30
+		Color randomColor = { rand() % 256, rand() % 256, rand() % 256, 255 };
+		newBird.color = randomColor;
+		world.add(newBird);
+	}
 }
 
+//Display world state
 void draw()
 {
 	BeginDrawing();
 	ClearBackground(BLACK);
-
 	DrawText("David Asher 101448950", 10, float(GetScreenHeight() - 30), 20, LIGHTGRAY);
-	DrawText(TextFormat("T: %6.2f seconds", time), GetScreenWidth() - 200, 20, 20, LIGHTGRAY);
-	// Draw adjustable variables
-	GuiSliderBar(Rectangle{ 100,15, 480, 30 }, "Time", TextFormat("%.2f", time), &time, 0, 240);
-	GuiSliderBar(Rectangle{ 100,45, 480, 30 }, "Launch PositionX:", TextFormat("%.2f", launchPosition.x), &launchPosition.x, 70, GetScreenWidth() - 70);
-	GuiSliderBar(Rectangle{ 100,75, 480, 30 }, "Launch PositionY:", TextFormat("%.2f", launchPosition.y), &launchPosition.y, 70, GetScreenHeight() - 70);
-	GuiSliderBar(Rectangle{ 100,105, 480, 30 }, "Launch Angle: ", TextFormat("%.2f deg", launchAngle), &launchAngle, 0, 360);
-	GuiSliderBar(Rectangle{ 100,135, 480, 30 }, "Launch Speed: ", TextFormat("%.2f", launchSpeed), &launchSpeed, 0, 480);
-	
-	/*DrawText(TextFormat("Launch Position: (%.1f, %.1f)", launchPosition.x, launchPosition.y), 10, 50, 20, RED);
-	DrawText(TextFormat("Launch Angle: %.1f deg", launchAngle), 10, 80, 20, RED);
-	DrawText(TextFormat("Launch Speed: %.1f", launchSpeed), 10, 110, 20, RED);*/
 
-	/*DrawCircle(x, y, 70, RED);
-	DrawCircle(500 + cos(time * frequency) * amplitude, 500 + sin(time * frequency) * amplitude, 70, BLUE);*/
-	// Draw launch position
-	DrawCircleV(launchPosition, 70, GREEN);
 
-	// Draw velocity vector with red line
-	DrawLineEx(launchPosition, endPosition, 5, RED);
+	GuiSliderBar(Rectangle{ 100, 15, 500, 20 }, "Time", TextFormat("%.2f", time), &time, 0, 240);
+
+	GuiSliderBar(Rectangle{ 100, 40, 500, 30 }, "Speed", TextFormat("Speed: %.0f", speed), &speed, -1000, 1000);
+
+	GuiSliderBar(Rectangle{ 100, 80, 500, 30 }, "Angle", TextFormat("Angle: %.0f Degrees", angle), &angle, -180, 180);
+
+	GuiSliderBar(Rectangle{ 100, 120, 500, 30 }, "Gravity Y", TextFormat("Gravity Y: %.0f Px/sec^2", world.accelerationGravity.y), &world.accelerationGravity.y, -1000, 1000);
+
+	DrawText(TextFormat("T: %6.2f", time), GetScreenWidth() - 140, 10, 30, LIGHTGRAY);
+
+	DrawText(TextFormat("Objects: %d", world.objects.size()), 10, 150, 30, LIGHTGRAY);
+
+
+	//Draw all physics objects
+	for(int i = 0; i < world.objects.size(); i++)
+	{
+		world.objects[i].draw();
+	}
 
 	EndDrawing();
+
 }
 
 int main()
@@ -71,7 +148,7 @@ int main()
 	InitWindow(InitialWidth, InitialHeight, "GAME2005 David Asher 101448950");
 	SetTargetFPS(TARGET_FPS);
 
-	while (!WindowShouldClose())
+	while (!WindowShouldClose()) // Loops TARGET_FPS times per second
 	{
 		update();
 		draw();
